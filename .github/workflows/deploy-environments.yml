@@ -1,0 +1,38 @@
+name: Deploy to Environments
+
+on:
+  push:
+    branches: [ main, develop ]
+
+jobs:
+  deploy-staging:
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    environment: staging
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Deploy to Staging
+      run: |
+        echo "Deploying to staging environment..."
+        # Add your staging deployment commands here
+      env:
+        API_URL: ${{ secrets.STAGING_API_URL }}
+        DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+
+  deploy-production:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Deploy to Production
+      run: |
+        echo "Deploying to production environment..."
+        # Add your production deployment commands here
+      env:
+        API_URL: ${{ secrets.PRODUCTION_API_URL }}
+        DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
