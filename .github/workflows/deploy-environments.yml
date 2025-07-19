@@ -1,38 +1,108 @@
-name: Deploy to Environments
+name: Advanced CI/CD
 
 on:
   push:
     branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  NODE_VERSION: '18'
 
 jobs:
-  deploy-staging:
-    if: github.ref == 'refs/heads/develop'
+  test:
     runs-on: ubuntu-latest
-    environment: staging
+    
+    strategy:
+      matrix:
+        node-version: [16, 18, 20]  # Test on multiple Node versions
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
-    - name: Deploy to Staging
-      run: |
-        echo "Deploying to staging environment..."
-        # Add your staging deployment commands here
-      env:
-        API_URL: ${{ secrets.STAGING_API_URL }}
-        DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run tests with coverage
+      run: npm test -- --coverage
+    
+    # Upload coverage to Codecov
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: ./coverage/lcov.info
+      continue-on-error: true
 
-  deploy-production:
-    if: github.ref == 'refs/heads/main'
+  security:
     runs-on: ubuntu-latest
-    environment: production
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
-    - name: Deploy to Production
-      run: |
-        echo "Deploying to production environment..."
-        # Add your production deployment commands here
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    # Security audit
+    - name: Run security audit
+      run: npm audit --audit-level=high
+      continue-on-error: true
+    
+    # Check for vulnerabilities
+    - name: Run vulnerability scan
+      run: npx audit-ci --config ./audit-ci.json
+      continue-on-error: true
+
+  build-and-deploy:
+    needs: [test, security]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Build for production
+      run: npm run build
       env:
-        API_URL: ${{ secrets.PRODUCTION_API_URL }}
-        DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        NODE_ENV: production
+    
+    # Create a release (updated action)
+    - name: Create Release
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+    
+    # Deploy to GitHub Pages
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v4
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./dist
+        cname: your-domain.com  # Optional: custom domain
