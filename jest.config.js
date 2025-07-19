@@ -3,5 +3,5 @@ module.exports = {
     collectCoverage: true,
     coverageDirectory: 'coverage',
     coverageReporters: ['text', 'lcov', 'html'],
-    testMatch: ['**/tests/*.test.js'],
+    testMatch: ['**/tests/**/*.test.js'],
   };
